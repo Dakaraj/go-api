@@ -21,13 +21,7 @@ func ArticleHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	// Create a new riuter
 	router := mux.NewRouter()
-	// Attach a path with handler
-	router.HandleFunc("/articles/{category}/{id:[0-9]+}", ArticleHandler).Name("articleRoute")
-	url, err := router.Get("articleRoute").URL("cateory", "sobachki", "id", "666")
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println(url)
+	router.Path("/articles/{category}/{id:[0-9]+}").HandlerFunc(ArticleHandler)
 	server := http.Server{
 		Handler:      router,
 		Addr:         "0.0.0.0:80",
