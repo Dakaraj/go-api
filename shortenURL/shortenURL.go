@@ -11,7 +11,7 @@ import (
 
 func createShortenedURL(w http.ResponseWriter, r *http.Request) {
 	method := r.Method
-	if method != "GET" {
+	if method != "POST" {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("400 - Bad Request"))
 		return
