@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -55,7 +56,9 @@ INSERT INTO books (
 )
 VALUES (?, ?, ?);
 `)
-	statement.Exec("A Tale Of Two Cities", "Charles Dickens", 140430547)
+	result, _ := statement.Exec("A Tale Of Two Cities", "Charles Dickens", 140430547)
+	lastRowID, _ := result.LastInsertId()
+	fmt.Println("Inserted under id:", lastRowID)
 	log.Println("Inserted the book into DB!")
 
 	// Read

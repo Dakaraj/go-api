@@ -1,65 +1,105 @@
 package main
 
 import (
-	"encoding/json"
+	"database/sql"
 	"log"
 	"net/http"
 	"net/url"
-	"time"
 
-	"github.com/gorilla/mux"
+	"github.com/dakaraj/go-api/shortenURL/dbutils"
+	"github.com/emicklei/go-restful"
+	"github.com/mattheath/base62"
+	_ "github.com/mattn/go-sqlite3"
 )
 
-type shortenURL struct {
-	URL string
+// DB is a driver reference for main database
+var DB *sql.DB
+
+const addend = 12345
+
+// ShortenURLResource is a struct for working with table shorten_url
+type ShortenURLResource struct {
+	OriginalURL string
+	ShortToken  string
 }
 
-func filterContentType(handler http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Println("Currently in the content type checker middleware")
-		if r.Header.Get("Content-Type") != "application/json" {
-			w.WriteHeader(http.StatusUnsupportedMediaType)
-			w.Write([]byte("415 - Usupported Media Type. JSON required"))
-			return
-		}
-		handler.ServeHTTP(w, r)
-	})
+// Register is used for binding paths and methods to ShortenURLResource
+func (su *ShortenURLResource) Register(container *restful.Container) {
+	ws := new(restful.WebService)
+	ws.Path("/v1/shorten")
+	ws.Route(ws.GET("/{token}").To(su.redirrectToOriginalURL).Produces(restful.MIME_JSON))
+	ws.Route(ws.POST("").To(su.shortenURL).Produces(restful.MIME_JSON))
+	container.Add(ws)
 }
 
-func createShortenedURL(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		w.Write([]byte("405 - Method Not Allowed"))
-		return
-	}
-	var rURL shortenURL
-	body := json.NewDecoder(r.Body)
-	err := body.Decode(&rURL)
+// GET /v1/shorten/{token}
+func (su *ShortenURLResource) redirrectToOriginalURL(request *restful.Request, response *restful.Response) {
+	token := request.PathParameter("token")
+	log.Println("Token:", token)
+	decodedToken := base62.DecodeToInt64(token) - addend
+	log.Println("Decoded token:", decodedToken)
+	err := DB.QueryRow(`
+SELECT original_url, shorten_token
+FROM shorten_url
+WHERE id = ?;
+`, decodedToken).Scan(&su.OriginalURL, &su.ShortToken)
 	if err != nil {
-		w.WriteHeader(http.StatusUnsupportedMediaType)
-		w.Write([]byte("405 - Unsupported media type. Please send a valid JSON"))
+		log.Println(err)
+		response.AddHeader("Content-Type", "text/plain")
+		response.WriteErrorString(http.StatusInternalServerError, "Token is invalid, no original URL found!")
+	} else {
+		response.WriteEntity(su)
 	}
-	_, pErr := url.ParseRequestURI(rURL.URL)
-	if pErr != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("400 - Bad Request. Provided URL is not valid!"))
-		return
+}
+
+// POST /v1/shorten?url={url}
+func (su *ShortenURLResource) shortenURL(request *restful.Request, response *restful.Response) {
+	originalURL := request.QueryParameter("url")
+	log.Println("Original url:", originalURL)
+	_, err := url.ParseRequestURI(originalURL)
+	if err != nil {
+		response.AddHeader("Content-Type", "text/plain")
+		response.WriteErrorString(http.StatusBadRequest, "Provided URL is not valid")
+	} else {
+		statement, err := DB.Prepare(`
+INSERT INTO shorten_url
+(original_url)
+VALUES (?);
+`)
+		result, err := statement.Exec(originalURL)
+		if err != nil {
+			response.AddHeader("Content-Type", "text/plain")
+			response.WriteErrorString(http.StatusBadRequest, err.Error())
+		} else {
+			lastRowID, _ := result.LastInsertId()
+			log.Println("Last row ID:", lastRowID)
+			token := base62.EncodeInt64(lastRowID + addend)
+			log.Println(token)
+			DB.Exec("UPDATE shorten_url SET shorten_token = ?", token)
+			su.OriginalURL = originalURL
+			su.ShortToken = token
+			response.WriteHeaderAndEntity(http.StatusCreated, su)
+		}
 	}
 }
 
 func main() {
-	r := mux.NewRouter()
-	r.StrictSlash(true)
-	r.UseEncodedPath()
-
-	r.HandleFunc("/api/v1/new", createShortenedURL)
-	r.Queries("url")
-
-	srv := http.Server{
-		Handler:      r,
-		Addr:         "127.0.0.1:80",
-		WriteTimeout: time.Second * 15,
-		ReadTimeout:  time.Second * 15,
+	var err error
+	DB, err = sql.Open("sqlite3", "./shortenURL/shortenURL.db")
+	if err != nil {
+		log.Fatal("DB Initialization failed:", err.Error())
 	}
-	log.Fatal(srv.ListenAndServe())
+	dbutils.Initialize(DB)
+
+	wsContainer := restful.NewContainer()
+	wsContainer.Router(restful.CurlyRouter{})
+
+	su := ShortenURLResource{}
+	su.Register(wsContainer)
+
+	server := &http.Server{
+		Addr:    ":80",
+		Handler: wsContainer,
+	}
+	log.Fatal(server.ListenAndServe())
 }
