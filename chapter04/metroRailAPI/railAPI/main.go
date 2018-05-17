@@ -190,7 +190,7 @@ WHERE id = ?;
 	}
 }
 
-// POST /v1/station
+// POST /v1/stations
 func (s *StationResource) createStation(request *restful.Request, response *restful.Response) {
 	log.Println(request.Request.Body)
 	decoder := json.NewDecoder(request.Request.Body)
@@ -375,11 +375,12 @@ WHERE id = ?;
 
 func main() {
 	var err error
-	DB, err = sql.Open("sqlite3", "./chapter04/metroRailAPI/railapi.db")
+	DB, err = sql.Open("sqlite3", "./chapter04/railapi.db")
 	if err != nil {
 		log.Fatal("Table creation failed:", err)
 	}
 	dbutils.Initialize(DB)
+
 	wsContainer := restful.NewContainer()
 	wsContainer.Router(restful.CurlyRouter{})
 	// Register TrainResource
