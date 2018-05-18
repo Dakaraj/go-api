@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/dakaraj/go-api/chapter04/metroRailAPI/dbutils"
+	"github.com/dakaraj/go-api/chapter04/dbutils"
 	"github.com/emicklei/go-restful"
 	_ "github.com/mattn/go-sqlite3"
 )

@@ -5,7 +5,7 @@ import (
 	"log"
 	"regexp"
 
-	"github.com/dakaraj/go-api/chapter04/metroRailAPI/dbutils"
+	"github.com/dakaraj/go-api/chapter04/dbutils"
 	"github.com/gin-gonic/gin"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -33,7 +33,6 @@ FROM train
 WHERE id = ?;
 `, id).Scan(&t.ID, &t.DriverName, &t.OperatingStatus)
 	if err != nil {
-		log.Println(err)
 		c.JSON(500, gin.H{
 			"error":        err.Error(),
 			"errorMessage": "Train could not be found",
@@ -123,7 +122,7 @@ WHERE id = ?;
 		})
 	} else {
 		if rowsAffected, _ := result.RowsAffected(); rowsAffected == 0 {
-			c.JSON(500, gin.H{
+			c.JSON(404, gin.H{
 				"errorMessage": "Invalid train-id given. Train could not be deleted",
 			})
 		} else {
@@ -150,7 +149,6 @@ FROM station
 WHERE id = ?;
 `, id).Scan(&s.ID, &s.Name, &s.OpeningTime, &s.ClosingTime)
 	if err != nil {
-		log.Println(err)
 		c.JSON(500, gin.H{
 			"error":        err.Error(),
 			"errorMessage": "Station could not be found",
@@ -203,6 +201,79 @@ VALUES (?, ?, ?);
 	}
 }
 
+// PUT /v1/stations
+func updateStation(c *gin.Context) {
+	var s StationResource
+	err := c.BindJSON(&s)
+	if err != nil {
+		c.JSON(500, gin.H{
+			"error":       err.Error(),
+			"erorMessage": "Request JSON is invalid!",
+		})
+		return
+	} else if s.Name == "" || s.ID == 0 {
+		c.JSON(500, gin.H{
+			"erorMessage": "Please provide a station name and Id!",
+		})
+		return
+	} else if !timePattern.MatchString(s.OpeningTime) || !timePattern.MatchString(s.ClosingTime) {
+		c.JSON(500, gin.H{
+			"errorMessage": `Provided time format is invalid. Use "HH:mm"!`,
+		})
+		return
+	}
+	statement, _ := DB.Prepare(`
+UPDATE station
+SET name = ?,
+opening_time = ?,
+closing_time = ?
+WHERE id = ?;
+`)
+	_, err = statement.Exec(s.Name, s.OpeningTime, s.ClosingTime, s.ID)
+	if err != nil {
+		c.JSON(500, gin.H{
+			"error":        err.Error(),
+			"errorMessage": "Error inserting data into database",
+		})
+	} else {
+		c.JSON(201, gin.H{
+			"result": s,
+		})
+	}
+}
+
+// DELETE /v1/stations/{station-id}
+func removeStation(c *gin.Context) {
+	id := c.Param("station-id")
+	statement, _ := DB.Prepare(`
+DELETE FROM station
+WHERE id = ?;
+`)
+	result, err := statement.Exec(id)
+	if err != nil {
+		c.JSON(500, gin.H{
+			"error":        err.Error(),
+			"errorMessage": "Error happened while attempting to delete row from database!",
+		})
+	} else {
+		if rowsAffected, _ := result.RowsAffected(); rowsAffected == 0 {
+			c.JSON(404, gin.H{
+				"errorMessage": "Invalid station-id given. Station could not be deleted",
+			})
+		} else {
+			c.JSON(200, map[string]string{"result": "success"})
+		}
+	}
+}
+
+// ScheduleResource is a model for holding station information
+type ScheduleResource struct {
+	ID          int
+	TrainID     int
+	StationID   int
+	ArrivalTime string
+}
+
 func main() {
 	var err error
 	DB, err = sql.Open("sqlite3", "./chapter04/railapi.db")
@@ -219,6 +290,8 @@ func main() {
 
 	router.GET("/v1/stations/:station-id", getStation)
 	router.POST("/v1/stations", createStation)
+	router.PUT("/v1/stations", updateStation)
+	router.DELETE("/v1/stations/:train-id", removeStation)
 
 	router.Run(":8080")
 }
