@@ -1,19 +1,12 @@
-import json
+import datetime
 
-from string import ascii_lowercase
-from random import randint, choice
+amount = float("1802.0")
 
-string_template = 'INSERT INTO `json_db`.`json_table` (`json_col`)' \
-                    + ' VALUES (\'{json_val}\');'
-json_template = {"name": "", "value": 0}
+a, b = divmod(amount, 100)
+if b != 0:
+    print(round((amount // 100 + 1) * 100, 1))
+else:
+    print(amount)
 
-strings_array = []
-for _ in range(100):
-    name = ''.join(choice(ascii_lowercase) for _ in range(randint(5, 10))) \
-        .capitalize()
-    value = randint(10, 1000)
-    json_template["name"], json_template["value"] = name, value
-    new_json = json.dumps(json_template, separators=(",", ":"))
-    insert_string = string_template.format(json_val=new_json)
-    print(insert_string)
 
+print(datetime.datetime.utcnow().isoformat())

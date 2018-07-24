@@ -2,12 +2,13 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/dakaraj/go-api/chapter07/jsonstore/models"
-	"github.com/gorilla/mux"
-	"github.com/jinzhu/gorm"
 	"log"
-	"net/http"
-	"time"
+
+	"github.com/dakaraj/go-api/chapter07/jsonstore/models"
+	"github.com/jinzhu/gorm"
+	"github.com/kataras/iris"
+	"github.com/kataras/iris/middleware/logger"
+	"github.com/kataras/iris/middleware/recover"
 )
 
 // DBClient stores database session information. Initialized once
@@ -17,31 +18,52 @@ type DBClient struct {
 
 // UserResponse is the response to be sent back to client
 type UserResponse struct {
-	User models.User `json:"user"`
-	Data interface{} `json:"data"`
+	Success  bool     `json:"success"`
+	ID       uint     `json:"id"`
+	UserData UserData `json:"userData"`
 }
 
-func (driver *DBClient) getUser(w http.ResponseWriter, r *http.Request) {
-	var user models.User
-	vars := mux.Vars(r)
+// UserData is a JSON struct that represent a user personal data
+type UserData struct {
+	EmailAddress string `json:"email_address"`
+	Username     string `json:"username"`
+	FirstName    string `json:"first_name"`
+	LastName     string `json:"last_name"`
+}
+
+func (driver *DBClient) getUser(ctx iris.Context) {
+	var user = models.User{}
+	userID := ctx.Params().GetDecoded("id")
 	// Handle response details
-	driver.db.First(&user, vars["id"])
-	var userData interface{}
-	// Unmarshal JSON string to interface
-	json.Unmarshal([]byte(user.Data), &userData)
-	var response = UserResponse{User: user, Data: userData}
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", "application/json")
-	// responseMap := map[string]interface{}{"url": ""}
-	respJSON, _ := json.Marshal(response)
-	w.Write(respJSON)
+	driver.db.First(&user, userID)
+	if user.ID == 0 {
+		ctx.StatusCode(iris.StatusNotFound)
+		ctx.JSON(iris.Map{"success": false, "message": "User not found"})
+	} else {
+		var userData UserData
+		// Unmarshal JSON string to interface
+		json.Unmarshal([]byte(user.Data), &userData)
+		ctx.JSON(UserResponse{Success: true, ID: user.ID, UserData: userData})
+	}
 }
 
-func (driver *DBClient) postUser(w http.ResponseWriter, r *http.Request) {
-
+func (driver *DBClient) postUser(ctx iris.Context) {
+	var user models.User
+	var body UserData
+	err := ctx.ReadJSON(&body)
+	if err != nil {
+		ctx.StatusCode(iris.StatusBadRequest)
+		ctx.JSON(iris.Map{"success": false, "message": "Invalid JSON in the request"})
+	} else {
+		bytesBody, _ := json.Marshal(body)
+		user.Data = string(bytesBody)
+		driver.db.Save(&user)
+		ctx.JSON(iris.Map{"success": true, "userId": user.ID})
+	}
+	
 }
 
-func (driver *DBClient) getUsersByFirstName(w http.ResponseWriter, r *http.Request) {
+func (driver *DBClient) getUsersByFirstName(ctx iris.Context) {
 
 }
 
@@ -54,16 +76,16 @@ func main() {
 	dbclient := &DBClient{db: db}
 	defer db.Close()
 
-	r := mux.NewRouter()
+	app := iris.New()
+	app.Logger().SetLevel("debug")
+
+	app.Use(recover.New())
+	app.Use(logger.New())
+
 	// Attach path with handler
-	r.HandleFunc("/v1/user/{a-zA-Z0-9}+", dbclient.getUser).Methods("GET")
-	r.HandleFunc("/v1/user", dbclient.postUser).Methods("POST")
-	r.HandleFunc("/v1/user", dbclient.getUsersByFirstName).Methods("GET")
-	srv := &http.Server{
-		Handler:      r,
-		Addr:         "127.0.0.1:8008",
-		WriteTimeout: 15 * time.Second,
-		ReadTimeout:  15 * time.Second,
-	}
-	log.Fatal(srv.ListenAndServe())
+	app.Get(`/v1/user/{id:string regexp(\d+)}`, dbclient.getUser)
+	app.Post("/v1/user", dbclient.postUser)
+	app.Get("/v1/user", dbclient.getUsersByFirstName)
+
+	app.Run(iris.Addr(":8008"), iris.WithoutServerError(iris.ErrServerClosed))
 }

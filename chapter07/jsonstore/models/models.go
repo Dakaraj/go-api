@@ -21,17 +21,18 @@ type Order struct {
 
 // InitDB initializes a connection to database
 func InitDB() (*gorm.DB, error) {
-	var err error
 	db, err := gorm.Open("postgres", "postgresql://dakaraj:R71VDl6m@localhost:26257/mydb?sslmode=require")
 	if err != nil {
 		return nil, err
 	}
-	if !db.HasTable("users") {
-		db.CreateTable(&User{})
-	}
-	if !db.HasTable("orders") {
-		db.CreateTable(&Order{})
-	}
+	// The below AutoMigrate is equivalent to this
+	// if !db.HasTable("users") {
+	// 	db.CreateTable(&User{})
+	// }
+	// if !db.HasTable("orders") {
+	// 	db.CreateTable(&Order{})
+	// }
+
 	db.AutoMigrate(&User{}, &Order{})
 
 	return db, nil

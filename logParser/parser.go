@@ -3,12 +3,13 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/dakaraj/go-api/logParser/utils"
 	"log"
 	"os"
 	re "regexp"
 	"strings"
 	"time"
+
+	"github.com/dakaraj/go-api/logParser/utils"
 )
 
 const (
@@ -24,7 +25,7 @@ const (
 	parseFilePatternTruncateString  = `/servlets/\d+?Dispatch/\d+?/jspforward\?file`
 	fileToPageTruncatePatternString = `\?file=.+?&page=`
 	pageTruncatePatternString       = `&page=([^&#=]+).*`
-	staticResoursesPatternString    = `\.(jpg|gif|png|js|css|swf|woff)$`
+	staticResoursesPatternString    = `\.(:?jpg|gif|png|js|css|swf|woff)$`
 )
 
 var totalRequests int
