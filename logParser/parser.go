@@ -16,7 +16,7 @@ const (
 	// Use limitTo variable to limit results only to N top requests
 	limitTo = 25
 	// Use filePath variable to set a custom path to the log file
-	filePath = "logParser/data/access.log"
+	filePath = "data/access.log"
 	// Use includeStatic variable to include static resources to statistics
 	includeStatic = true
 

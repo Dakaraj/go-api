@@ -60,7 +60,7 @@ func (driver *DBClient) postUser(ctx iris.Context) {
 		driver.db.Save(&user)
 		ctx.JSON(iris.Map{"success": true, "userId": user.ID})
 	}
-	
+
 }
 
 func (driver *DBClient) getUsersByFirstName(ctx iris.Context) {
